@@ -106,4 +106,4 @@ IMDb retains rights to its data. No movie database is redistributed or licensed 
 
 References: [SQLite's aggregate-query rules](https://www.sqlite.org/lang_select.html#bareagg), [IMDb dataset fields](https://www.imdb.com/interfaces/), and [IMDb usage guidance](https://help.imdb.com/article/imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX).
 
-[Portfolio case study](https://gracengg.github.io/portfolio-preview/case-studies/imdb-catalogue.html)
+[Portfolio case study](https://gracengg.github.io/case-studies/imdb-catalogue.html)

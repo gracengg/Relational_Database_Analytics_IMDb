@@ -131,7 +131,7 @@ def profile_database(connection):
 
 def write_csv(path, records, fields):
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader(); writer.writerows(records)
 
 

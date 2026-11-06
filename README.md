@@ -1,133 +1,116 @@
-# IMDb Catalogue Analytics
+# IMDb Catalogue Selection Analysis
 
-**Grace Ngo | SQL, SQLite and Python**
+**Grace Ngo · SQL, SQLite and Python**
 
-How do genre definitions, missing metadata and vote thresholds change the patterns an analyst sees in a film catalogue?
+**Question:** How does requiring more votes change the coverage and genre mix of a rating-ranked movie shortlist?
 
-This project turns three relational queries into an auditable catalogue-review workflow: runtime-bin rating summaries, genre coverage by release decade, and year-specific shortlists with vote-floor sensitivity. SQL handles joins, grouping, genre membership and deterministic ranking. Python validates inputs, presents compact results and tests the decisions behind them.
+This analysis quantifies a selection-policy trade-off: increasing a minimum-vote requirement gives a shortlist more audience participation support, but also changes which films can enter it. SQL joins, CTEs and window functions compare four eligibility rules; Python reconciles the calculations, measures shortlist turnover and produces aggregate reports.
 
-The analytical use is catalogue exploration and shortlist review. Ratings are recorded audience evaluations, votes are participation counts, and genre presence describes catalogue coverage. These measures do not establish viewing figures, commercial demand or an optimal film runtime.
+## Results at a glance
 
-## Official-data findings added November 2026
+Scope: non-adult movies released **2000–2024**, joined to observed IMDb ratings. The baseline contains **88,601 movies with at least 100 votes**. Official datasets were retrieved **6 November 2026**, with source run date **5 November 2026**.
 
-The new research extension asks **how a minimum-vote requirement changes the apparent quality and coverage of a movie shortlist**. It uses official IMDb TSV files retrieved 6 November 2026 (source run date 5 November), not the fictional verification records below. Source hashes and scope accompany every published aggregate.
+| Minimum votes | Eligible movies | Baseline retained | Mean title rating | Baseline top-50 retained |
+| ---: | ---: | ---: | ---: | ---: |
+| 100 | 88,601 | 100.0% | 5.789 | 50 / 50 |
+| 1,000 | 30,977 | 35.0% | 6.101 | 3 / 50 |
+| 10,000 | 8,323 | 9.4% | 6.449 | 0 / 50 |
+| 100,000 | 2,008 | 2.3% | 6.849 | 0 / 50 |
 
-Among non-adult movies released **2000–2024**, increasing the minimum from 100 to 10,000 votes:
+Raising the minimum from **100 to 10,000 votes**:
 
-- Reduces the review pool from **88,601 to 8,323 movies**, retaining **9.4%** of baseline titles.
-- Changes the equal-title mean rating from **5.789 to 6.449**; with fixed release-year weights, the difference remains **+0.650 points**.
-- Changes Documentary coverage from **12.5% to 2.8%**, while Action increases from **12.8% to 26.2%**.
-- Replaces **all 50 titles** in a rating-ranked top-50 shortlist. Low-vote, highly rated titles dominate the baseline ranking; the threshold changes which titles can enter.
+- Excludes **90.6%** of the baseline catalogue.
+- Reduces Documentary share from **12.5% to 2.8%**.
+- Increases Action share from **12.8% to 26.2%**.
+- Replaces **all 50** baseline shortlist titles.
+- Raises the equal-title mean rating from **5.789 to 6.449**. With release-year weights fixed to the baseline distribution, the difference is **+0.650 points**.
 
-**Decision:** show vote eligibility and genre mix alongside a shortlist. A vote floor supplies participation support but creates a coverage trade-off. It does not measure demand or improve movie quality. No commercial uplift, causal effect or optimal threshold is claimed.
+![Catalogue retention and genre-share changes across vote thresholds](reports/research/vote_floor_review.svg)
 
-[Read findings and definitions](reports/research/findings.md) · [Inspect SQL](imdb_analytics/queries/vote_floor_research.sql) · [Aggregate results](reports/research/threshold_summary.csv) · [Source manifest](reports/research/source_manifest.json)
+[Detailed findings](reports/research/findings.md) · [Threshold table](reports/research/threshold_summary.csv) · [Genre mix](reports/research/genre_mix.csv) · [Release-year sensitivity](reports/research/year_sensitivity.csv) · [Source fingerprints](reports/research/source_manifest.json)
 
-![Vote-floor coverage and genre shifts](reports/research/vote_floor_review.svg)
+## Decision relevance
 
-### Run the official-data extension locally
+For a catalogue analyst preparing a discovery or review shortlist, a vote floor is a coverage decision as well as a participation rule. A higher mean rating alone can conceal a much narrower candidate pool.
 
-Obtain `title.basics.tsv.gz` and `title.ratings.tsv.gz` from [IMDb's official dataset page](https://data.imdb.com/non-commercial-datasets/) under its terms. With Python 3.11+ and the repository requirements installed, run:
+**Recommendation:** present retained-title counts, genre mix and shortlist overlap alongside the ranking. If discovery is part of the objective, maintain a separate lower-vote review queue so less widely rated films remain visible. Document the trade-off before choosing an eligibility rule.
 
-```sh
-python -m imdb_analytics.importer --basics data/title.basics.tsv.gz --ratings data/title.ratings.tsv.gz --output data/research.sqlite
-python -m imdb_analytics.research --database data/research.sqlite --output outputs/research
-python -m unittest discover -s tests -v
-```
+This is decision support for selection-policy review. It does not identify an optimal cutoff or establish commercial demand: votes are cumulative participation counts and ratings summarize recorded audience evaluations.
 
-The official files refresh daily. Exact numerical reproduction requires the local snapshots identified by the published SHA-256 hashes; a fresh download can yield different counts. Raw datasets and the database remain outside Git. This is a new official-data extension, not reconstruction of the absent classroom database.
+## Analytical design
 
-### Original notebooks and software demonstration
+1. **Define a common population.** Join title and rating records on title ID; retain non-adult movies released in 2000–2024. Runtime availability is not an inclusion requirement.
+2. **Compare four predefined floors.** Use 100, 1,000, 10,000 and 100,000 votes for counts, mean and median ratings, and baseline retention.
+3. **Preserve genre membership.** Match exact genre tokens. Titles may have several tags, and unknown genres stay in the denominator; shares can sum above 100%.
+4. **Measure shortlist turnover.** Rank by rating descending, votes descending and title ID ascending. Compare top-50 intersection, new entrants and Jaccard overlap with the baseline.
+5. **Hold release-year composition fixed.** Compare within-year mean-rating differences using baseline-year weights. If a year has no eligible observations, the standardized comparison is left undefined.
+6. **Reconcile calculations.** Independently compare SQL counts, means, medians and genre counts with Python calculations against the imported records.
 
-The original analysis used a local `imdb.db` file that was not included with the supplied notebooks. Its historical findings are not asserted as reproduced. The earlier package examples use **41 explicitly fictional titles** only to demonstrate and test query behavior. Official-data research aggregates are isolated in `reports/research`; fictional outputs remain in `reports/demo`.
+The year-standardized result addresses release-year composition only. It does not remove audience, language, geography or survival selection. Higher observed ratings describe a different selected pool; they do not establish improved film quality.
 
-## Analytical outputs
+## Reproduce the official-data analysis
 
-| Output | Question | Important definition |
-| --- | --- | --- |
-| Runtime summaries | How do mean title ratings vary across supported runtime bins within a genre? | Explicit `AVG(rating)` and title counts; at least two qualifying titles per bin by default |
-| Genre coverage | What fraction of eligible catalogue movies carries each genre tag in a release decade? | Exact tokens; multi-genre membership; all eligible movies form the denominator, including unknown genres |
-| Year shortlist | Which eligible movies have the highest recorded ratings? | Rating descending, votes descending, title ID ascending for stable ties |
-| Vote-floor sensitivity | How much does the eligible pool and shortlist change when minimum votes increase? | Eligible counts, baseline retention and Jaccard overlap |
-| Data profile | Which records can support each question? | Full-table counts and explicit missing markers, rather than the first 50,000 rows treated as a random sample |
-
-Adult titles and television entries are consistently excluded. Runtime intervals are half-open: `[40, 200)` excludes 200, and a bin beginning at 90 covers 90–99.999 minutes. Genre shares can sum above 100% because films may have multiple genres. A decade with no eligible movies has an undefined share, not an observed zero percent.
-
-## Run the demonstration
-
-Python 3.11 or later. From the repository root:
+Requires **Python 3.11+**. From the repository root:
 
 ```sh
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-python -m imdb_analytics.analysis --demo
-python -m unittest discover -s tests -v
 ```
 
 On Windows, activate with `.venv\Scripts\activate`.
 
-[Demonstration outputs](reports/demo) include CSV tables, a JSON summary and two charts. Every summary identifies the dataset as a synthetic fixture. The [analysis notebook](Analyzing.ipynb) executes the same package, and [Exploring Data.ipynb](Exploring%20Data.ipynb) demonstrates the profile and schema checks. Their code cells were executed sequentially; native Jupyter kernel launch was not verified in the publication environment.
-
-![Fictional demonstration of vote-floor sensitivity](reports/demo/vote_sensitivity.png)
-
-## Use a local database
-
-```sh
-python -m imdb_analytics.analysis --database data/imdb.db --year 2010 --output outputs/local
-```
-
-The database opens read-only. A missing path raises an error instead of silently creating an empty SQLite file. Required columns are checked, and duplicate title IDs stop the workflow before they can multiply joined rows.
-
-| Table | Required fields |
-| --- | --- |
-| `titles` | `title_id`, `type`, `primary_title`, `is_adult`, `premiered`, `runtime_minutes`, `genres` |
-| `ratings` | `title_id`, `rating`, `votes` |
-
-The schema matches the supplied exploration notebook's relevant tables. Additional tables are permitted but are not required or claimed as part of this implementation.
-
-### Import official TSV files locally
-
-Obtain `title.basics.tsv.gz` and `title.ratings.tsv.gz` through [IMDb's official documentation](https://www.imdb.com/interfaces/), subject to its terms. Then run:
+Obtain `title.basics.tsv.gz` and `title.ratings.tsv.gz` from [IMDb's official dataset documentation](https://developer.imdb.com/non-commercial-datasets/) under its terms, and place them in a local `data/` directory.
 
 ```sh
 python -m imdb_analytics.importer \
   --basics data/title.basics.tsv.gz \
   --ratings data/title.ratings.tsv.gz \
-  --output data/imdb_movies.db
-python -m imdb_analytics.analysis --database data/imdb_movies.db --output outputs/local
+  --output data/research.sqlite
+python -m imdb_analytics.research \
+  --database data/research.sqlite \
+  --output outputs/research
+python -m unittest discover -s tests -v
 ```
 
-The streaming importer retains non-adult movies, converts `\N` to null, records source hashes and creates a year-filter index. It refuses an existing destination and removes incomplete output after failure. This produces a new local subset, not the absent historical database. Snapshot differences must be considered before comparing runs.
+The importer streams the files, validates fields, records input SHA-256 hashes and builds a local SQLite movie subset. It refuses an existing destination and removes partial output after failure. The analysis opens the database read-only.
+
+Generated outputs include threshold, genre and release-year CSV tables; a combined JSON result; findings; a run manifest with input fingerprints; and SVG/PNG charts. Raw files, SQLite databases and local outputs are ignored by Git.
+
+**Snapshot reproduction:** IMDb refreshes its download URLs daily. The published [source manifest](reports/research/source_manifest.json) identifies the exact compressed inputs behind the results above. Reproducing those figures exactly requires those input snapshots; a new download is a new snapshot and may produce different results.
 
 ## Verification
 
-**Twenty automated tests** cover numerical aggregation, bin boundaries, exact genre membership, join cardinality, multi-genre denominators, consistent title eligibility, stable ranking ties, empty results, parameter binding, missing files, read-only behavior and atomic imports. The full fictional demonstration also runs in GitHub Actions.
+The automated suite checks aggregation, exact genre membership, overlapping-genre denominators, deterministic ties, shortlist turnover, missing-year standardization, input validation, read-only database access and atomic imports. GitHub Actions runs the tests and the self-contained demonstration.
 
-The corrected runtime query explicitly averages title ratings. The original query selected unaggregated rating and runtime columns while grouping by runtime bin, so its values did not establish the average-rating curves described in the original report. [The methodological review](docs/methodology.md) records this and other changes.
+The published research aggregates include independent SQL/Python reconciliation. The small fictional verification fixtures are separate software tests; they are not the source of the official-data findings.
 
-## Repository structure
+For an offline software demonstration after installing requirements:
 
-```text
-imdb_analytics/
-  analysis.py        Validation, profiling, query wrappers and figures
-  importer.py        Streaming local TSV importer
-  fixture.py         Fictional verification records
-  queries/           Inspectable parameterized SQL
-tests/               Numerical and behavioral checks
-reports/demo/        Fictional demonstration outputs only
-docs/                Methodological decisions and source fingerprints
-Analyzing.ipynb      Executed analytical walkthrough
-Exploring Data.ipynb Executed schema and data-quality walkthrough
-Data Report.ipynb    Concise interpretation guide
+```sh
+python -m imdb_analytics.analysis --demo --output outputs/demo
 ```
 
-## Authorship, source and limits
+The demonstration also supports runtime-bin summaries, genre coverage by decade and year-specific shortlists. [Methodological notes](docs/methodology.md) explain query definitions and corrections.
 
-The original notebooks identify Grace Ngo and Dickinson College's DATA 200 project in Fall 2025. This publication refactors that analysis and narrows its claims; it does not imply that the original submission contained the new importer, checks or sensitivity analysis. [Source fingerprints](docs/source_manifest.json) identify the supplied materials.
+## Repository guide
 
-IMDb retains rights to its data. No movie database is redistributed or licensed by this repository. The original descriptive conclusions about runtime “sweet spots,” streaming effects or production strategy are not adopted as verified findings. An audience-rating association cannot establish a causal editing recommendation, and catalogue counts do not measure demand. The official-data extension above now provides a documented rerun on a new authorized snapshot. Its coverage and threshold sensitivity are reported alongside the findings; it does not reproduce the missing historical database.
+| Path | Purpose |
+| --- | --- |
+| [research.py](imdb_analytics/research.py) | Threshold analysis, independent reconciliation and reporting |
+| [vote_floor_research.sql](imdb_analytics/queries/vote_floor_research.sql) | Inspectable SQL with CTEs and window functions |
+| [importer.py](imdb_analytics/importer.py) | Local TSV import, validation and source hashing |
+| [reports/research](reports/research) | Published official-data aggregates, chart and source manifest |
+| [tests](tests) | Numerical and behavioral checks |
+| [analysis.py](imdb_analytics/analysis.py) | Additional catalogue queries and offline demonstration |
+| [reports/demo](reports/demo) | Explicitly fictional software examples |
+| [docs](docs) | Methodology and original-material fingerprints |
 
-References: [SQLite's aggregate-query rules](https://www.sqlite.org/lang_select.html#bareagg), [IMDb dataset fields](https://www.imdb.com/interfaces/), and [IMDb usage guidance](https://help.imdb.com/article/imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX).
+## Source and authorship
+
+IMDb supplies the title, genre, rating and vote-count fields. IMDb retains rights to its data; the source TSV files and derived title database are not redistributed here. Consult its documentation for access conditions.
+
+Grace Ngo authored the original DATA 200 notebooks in Fall 2025. The November 2026 research is a new analysis of official IMDb files. The original notebooks and fictional demonstrations are retained as supporting development material; the current findings come from the documented official-data snapshot.
 
 [Portfolio case study](https://gracengg.github.io/case-studies/imdb-catalogue.html)
+

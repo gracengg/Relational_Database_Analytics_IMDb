@@ -1,6 +1,7 @@
 """Vote-floor sensitivity on an authorized local IMDb snapshot; aggregate exports only."""
 import argparse
 import csv
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -90,6 +91,13 @@ def write_csv(path,rows):
 
 def write_reports(result,output):
     output.mkdir(parents=True,exist_ok=True)
+    manifest = {
+        'generated_at_utc': datetime.now(timezone.utc).isoformat(),
+        'config': result['config'],
+        'import_metadata': result.get('import_metadata', {}),
+        'note': 'Generation time is not the source snapshot or retrieval date. Input hashes identify the local source files.',
+    }
+    (output/'run_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     for key in ['threshold_summary','genre_mix','year_sensitivity']:
         write_csv(output/(key+'.csv'),result[key])
     (output/'evaluation.json').write_text(json.dumps(result,indent=2)+'\n')
@@ -99,7 +107,7 @@ def write_reports(result,output):
     shifts=sorted(((g,g1[g]-g0[g]) for g in g0),key=lambda x:abs(x[1]),reverse=True)
     lines=['# IMDb vote-floor sensitivity','',
       'Question: how does requiring more audience votes change a movie-review pool and its apparent quality?',
-      '',f"Scope: non-adult IMDb movies released {result['config']['start_year']}–{result['config']['end_year']}; joined to observed ratings. Snapshot metadata and hashes are in source_manifest.json.",
+      '',f"Scope: non-adult IMDb movies released {result['config']['start_year']}–{result['config']['end_year']}; joined to observed ratings. Input fingerprints and run metadata are in run_manifest.json.",
       '', '| Minimum votes | Titles | Retained vs 100 votes | Mean title rating | Median rating | Top-50 retained |',
       '| ---: | ---: | ---: | ---: | ---: | ---: |']
     for r in rows:lines.append(f"| {r['vote_floor']:,} | {r['n_titles']:,} | {r['baseline_retention']:.1%} | {r['mean_title_rating']:.3f} | {r['median_title_rating']:.2f} | {r['shortlist_overlap_count']} / {r['baseline_shortlist_n']} |")
@@ -129,7 +137,8 @@ def plot(result,output):
     fig,axes=plt.subplots(1,2,figsize=(11,4.8),gridspec_kw={'width_ratios':[1,1.2]})
     fig.subplots_adjust(left=.08,right=.97,top=.78,bottom=.24,wspace=.4)
     fig.suptitle('Vote requirements change the movie pool',x=.08,y=.97,ha='left',fontsize=17,fontweight='bold')
-    fig.text(.08,.86,'IMDb movies released 2000–2024 | Snapshot retrieved 6 November 2026',fontsize=10,color='#4b5563')
+    config = result['config']
+    fig.text(.08,.86,f"IMDb movies released {config['start_year']}–{config['end_year']} | Local input fingerprints: run_manifest.json",fontsize=10,color='#4b5563')
     ax=axes[0];bars=ax.bar(x,[r['baseline_retention']*100 for r in rows],color='#253f57',width=.6)
     ax.set_xticks(x,[f"{r['vote_floor']:,}" for r in rows]);ax.set_xlabel('Minimum cumulative votes');ax.set_ylabel('Baseline movie pool retained (%)');ax.set_ylim(0,115)
     for bar,r in zip(bars,rows):ax.text(bar.get_x()+bar.get_width()/2,bar.get_height()+2,f"{r['n_titles']:,}\n({r['baseline_retention']:.1%})",ha='center',va='bottom',fontsize=9)
@@ -144,7 +153,7 @@ def plot(result,output):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--database',type=Path,required=True)
-    p.add_argument('--output',type=Path,default=Path('reports/research'));args=p.parse_args()
+    p.add_argument('--output',type=Path,default=Path('outputs/research'));args=p.parse_args()
     path=args.database.resolve()
     if not path.is_file():p.error('Database does not exist')
     with sqlite3.connect(path.as_uri()+'?mode=ro',uri=True) as con:
@@ -156,3 +165,4 @@ def main():
 
 
 if __name__=='__main__':main()
+

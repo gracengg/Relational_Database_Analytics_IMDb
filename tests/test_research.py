@@ -38,6 +38,18 @@ class ResearchTests(unittest.TestCase):
     def test_empty_window_fails(self):
         with self.assertRaisesRegex(ValueError,'No baseline'):analyze(self.con,2020,2024)
 
+    def test_reports_preserve_input_fingerprints_for_a_new_run(self):
+        result = analyze(self.con)
+        result['import_metadata'] = {'basics_sha256': 'example-input-hash'}
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            write_reports(result, output)
+            manifest = json.loads((output / 'run_manifest.json').read_text())
+            self.assertEqual(manifest['import_metadata'], result['import_metadata'])
+            self.assertEqual(manifest['config'], result['config'])
+            self.assertIn('generated_at_utc', manifest)
+            self.assertIn('run_manifest.json', (output / 'findings.md').read_text())
+
     def test_exact_genre_tokens(self):
         self.con.execute("UPDATE titles SET genres='Live-Action' WHERE title_id='a'")
         rows=analyze(self.con)['genre_mix']
@@ -46,3 +58,5 @@ class ResearchTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+import json
